@@ -2,24 +2,42 @@
 const BlogPostModel = require("../models/blog-post");
 
 const getAllAuthors = async (_, res) => {
-    // First fetch all blog posts
-    const blogPosts = await BlogPostModel.find();
-    const authors = {};
-    /* Create a unique map of authors, it will look like this:
-    {
-        author1Name: {author1},
-        author2Name: {author2},
-        author3Name: {author3},
-        ... and so on
+    try {
+        // First fetch all blog posts
+        const blogPosts = await BlogPostModel.find();
+        const authors = {};
+        /* Create a unique map of authors, it will look like this:
+        {
+            author1Name: {author1},
+            author2Name: {author2},
+            author3Name: {author3},
+            ... and so on
+        }
+        */
+        blogPosts.forEach(blogPost => {
+            if (!authors[blogPost.author.name])
+                authors[blogPost.author.name] = blogPost.author;
+        })
+        // The above check ensures that only unique authors are mapped, repeated authors will be skipped
+        res.json(Object.values(authors));
+        // Return array of unique author objects
+    } catch (err) {
+        res.status(422).json({ message: err.message });
     }
-    */
-    blogPosts.forEach(blogPost => {
-        if (!authors[blogPost.author.name])
-            authors[blogPost.author.name] = blogPost.author;
-    })
-    // The above check ensures that only unique authors are mapped, repeated authors will be skipped
-    res.json(Object.values(authors));
-    // Return array of unique author objects
+};
+
+/* NOTE: This is an alternate solution to the above function
+If we use the alternate function addBlogPostWithUniqueAuthorId which reuses author IDs and hence ensures unique author IDs, we can simplify the function using the Mongoose function distinct() which fetches unique values
+*/
+const getAllAuthorsWithUniqueAuthorId = async (_, res) => {
+    try {
+        // Fetch all unique authors using distinct function on the author field
+        const authors = await BlogPostModel.distinct("author");
+        res.json(Object.values(authors));
+        // Return array of unique author objects
+    } catch (err) {
+        res.status(422).json({ message: err.message });
+    }
 };
 
 const updateAuthor = async (req, res) => {
@@ -44,15 +62,21 @@ const updateAuthor = async (req, res) => {
     }
     Since MongoDB query requires nested keys for author object
     */
-    const updatedBlogPosts = await BlogPostModel.updateMany(
-        query,
-    {
-        $set: updateSet
-    });
-    res.json({updated: updatedBlogPosts});
+
+    try {
+        const updatedBlogPosts = await BlogPostModel.updateMany(
+            query,
+        {
+            $set: updateSet
+        });
+        res.json({updated: updatedBlogPosts});
+    } catch (err) {
+        res.status(422).json({ message: err.message });
+    }
 };
 
 module.exports = {
     getAllAuthors,
+    getAllAuthorsWithUniqueAuthorId,
     updateAuthor
 }

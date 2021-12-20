@@ -3,16 +3,41 @@
 const BlogPostModel = require("../models/blog-post");
 
 const getAllBlogPosts = async (_, res) => {
-  // Simple find query to fetch all blog posts
-  const blogPosts = await BlogPostModel.find();
-  res.json(blogPosts);
+  try {
+    // Simple find query to fetch all blog posts
+    const blogPosts = await BlogPostModel.find();
+    res.json(blogPosts);
+  } catch (err) {
+    res.status(422).json({ message: err.message });
+  }
 };
 
 const addBlogPost = async (req, res) => {
   const blogPostData = req.body;
   try {
-    // Simple create query to create a new blog post with the request body
+    // Simple create query to create a new blog post with the request body, assuming that all data is sent in the request body in correct format as required by model
     const newBlogPost = await BlogPostModel.create(blogPostData);
+    // Note: We didn't use any validations before adding the blog post, as all necessary validations (required check, default values) are handled by our model
+    res.status(201).json(newBlogPost);
+  } catch (err) {
+    res.status(422).json({ message: err.message });
+  }
+};
+
+/* NOTE: This is an alternate solution to the above function
+Although the above function works but it creates a new author ID for the same author across blog posts, so here is an alternate function which checks if the author is existing before creating a blog post and reuses the author ID
+*/
+const addBlogPostWithUniqueAuthorId = async (req, res) => {
+  const blogPostData = req.body;
+  try {
+    // Check if this author already exists
+    const existingAuthor = await BlogPostModel.findOne({"author.name": blogPostData.author.name}).select({"author._id": 1});
+    // Save the existing author ID for the new blog post
+    if (existingAuthor && existingAuthor.author)
+      blogPostData.author._id = existingAuthor.author._id
+    // Simple create query to create a new blog post
+    const newBlogPost = await BlogPostModel.create(blogPostData);
+    // Note: We didn't use any validations before adding the blog post, as all necessary validations (required check, default values) are handled by our model
     res.status(201).json(newBlogPost);
   } catch (err) {
     res.status(422).json({ message: err.message });
@@ -33,7 +58,15 @@ const filterBlogPosts = async (req, res) => {
     if (author) query["author.name"] = author;
 
     /*
-    Query object will look like:
+    Depending on query params, the query object will look like:
+    {
+      tag: <tagname>
+    }
+    OR
+    {
+      "author.name": <authorname>
+    }
+    OR
     {
       tag: <tagname>,
       "author.name": <authorname>
@@ -75,6 +108,8 @@ const updateBlogPost = async (req, res) => {
       {
         $set: req.body
       },
+      // This flag ensures MongoDB returns the new document after update operation is completed
+      // Then we don't need to fetch the document again
       {
         new: true,
       }
@@ -108,6 +143,7 @@ const updateLikes = async (req, res) => {
   const { id } = req.params;
   try {
     // find one and update query using $inc operator
+    // can also use findByIdAndUpdate
     const blogPost = await BlogPostModel.findOneAndUpdate(
       { _id: id },
       { $inc: { likes: 1 } },
@@ -129,6 +165,7 @@ const updateLikes = async (req, res) => {
 module.exports = {
   getAllBlogPosts,
   addBlogPost,
+  addBlogPostWithUniqueAuthorId,
   filterBlogPosts,
   getOneBlogPost,
   updateBlogPost,
